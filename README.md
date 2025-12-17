@@ -2,8 +2,18 @@
 
 [![Github Actions](https://github.com/Arborescent/shogi-kifu-rs/workflows/build/badge.svg)](https://github.com/Arborescent/shogi-kifu-rs/actions?workflow=build)
 
-A Shogi game serialization/deserialization library in CSA format.
-CSA format is a plaintext format for recording Shogi games. This library supports parsing CSA-formatted string as well as composing CSA-formatted string from structs. Detail about CSA format is found at [here](http://www.computer-shogi.org/protocol/record_v22.html).
+A Shogi game record serialization/deserialization library in CSA format.
+
+CSA format is a plaintext format for recording Shogi games. This library supports parsing CSA-formatted strings as well as composing CSA-formatted strings from structs.
+
+## Supported Versions
+
+- CSA V2 ([spec](http://www2.computer-shogi.org/protocol/record_v2.html))
+- CSA V2.1 ([spec](http://www2.computer-shogi.org/protocol/record_v21.html))
+- CSA V2.2 ([spec](http://www2.computer-shogi.org/protocol/record_v22.html))
+- CSA V3.0 ([spec](http://www2.computer-shogi.org/protocol/record_v3.html))
+
+Version is automatically detected from the version line in the input.
 
 This is a fork of [csa-rs](https://github.com/nozaq/csa-rs) by [nozaq](https://github.com/nozaq).
 
