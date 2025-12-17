@@ -1,0 +1,177 @@
+// CSA format grammar for Shogi game records - Version 3.0
+
+// Entry point - complete game record
+game_record = {
+    SOI ~
+    encoding_line? ~
+    comment_line* ~
+    version_line ~
+    comment_line* ~
+    black_player_line? ~
+    comment_line* ~
+    white_player_line? ~
+    comment_line* ~
+    game_attr_line* ~
+    comment_line* ~
+    position ~
+    comment_line* ~
+    side_to_move_line ~
+    comment_line* ~
+    move_records ~
+    final_move? ~
+    trailing_content? ~
+    EOI
+}
+
+// Line separators
+line_sep = _{ ("\r\n" | "\n" | "\r" | ",") }
+
+// Encoding declaration (V3.0)
+encoding = { "UTF-8" | "SHIFT_JIS" }
+encoding_line = _{ "'CSA encoding=" ~ encoding ~ line_sep }
+
+// Comments - can be followed by line_sep or EOI
+comment = { "'" ~ (!line_sep ~ ANY)* }
+comment_line = _{ comment ~ line_sep }
+trailing_content = _{ (comment_line | (comment ~ &EOI))* }
+
+// Program-readable comments (V3.0)
+program_comment = { "'*" ~ (!line_sep ~ ANY)* }
+program_comment_line = _{ program_comment ~ line_sep }
+
+// Evaluation, PV, and node count (V3.0)
+// Format: '** <eval> <pv_moves> #<nodes>
+eval_comment = { "'**" ~ " " ~ eval_value ~ (" " ~ pv_moves)? ~ (" " ~ node_count)? }
+eval_value = @{ "-"? ~ ASCII_DIGIT+ }
+pv_moves = { pv_move ~ (" " ~ pv_move)* }
+pv_move = { normal_move | pv_special_move }
+pv_special_move = {
+    "+" ~ "PASS" | "-" ~ "PASS" |
+    "%" ~ ("TORYO" | "KACHI" | "SENNICHITE" | "MAX_MOVES" | "REP_SUP" | "REP_INF")
+}
+node_count = { "#" ~ ASCII_DIGIT+ }
+eval_comment_line = _{ eval_comment ~ line_sep }
+
+// Version
+version = { "V3.0" }
+version_line = _{ version ~ line_sep }
+
+// Player names
+black_player = { "N+" ~ player_name }
+white_player = { "N-" ~ player_name }
+player_name = @{ (!line_sep ~ ANY)* }
+black_player_line = _{ black_player ~ line_sep }
+white_player_line = _{ white_player ~ line_sep }
+
+// Game attributes
+game_attr = { "$" ~ attr_key ~ ":" ~ attr_value }
+attr_key = @{ (!":" ~ !line_sep ~ ANY)+ }
+attr_value = { datetime | time_control | timelimit | attr_text }
+attr_text = @{ (!line_sep ~ ANY)* }
+game_attr_line = _{ comment_line* ~ game_attr ~ line_sep }
+
+// Date and time
+datetime = { date ~ (" " ~ time)? }
+date = @{ year ~ "/" ~ month ~ "/" ~ day }
+time = @{ hour ~ ":" ~ minute ~ ":" ~ second }
+year = @{ ASCII_DIGIT{4} }
+month = @{ ASCII_DIGIT{2} }
+day = @{ ASCII_DIGIT{2} }
+hour = @{ ASCII_DIGIT{2} }
+minute = @{ ASCII_DIGIT{2} }
+second = @{ ASCII_DIGIT{2} }
+
+// Time control (V3.0) - $TIME format
+// Format: initial+byoyomi+fischer (in seconds, supports decimals)
+time_control = { time_seconds ~ "+" ~ time_seconds ~ "+" ~ time_seconds }
+time_seconds = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT{1,3})? }
+
+// Time limit (V2.x backwards compatibility)
+timelimit = { timelimit_hours ~ ":" ~ timelimit_minutes ~ "+" ~ timelimit_byoyomi }
+timelimit_hours = @{ ASCII_DIGIT+ }
+timelimit_minutes = @{ ASCII_DIGIT{2} }
+timelimit_byoyomi = @{ ASCII_DIGIT+ }
+
+// Colors
+color = { "+" | "-" }
+
+// Piece types
+piece_type = {
+    "FU" | "KY" | "KE" | "GI" | "KI" | "KA" | "HI" | "OU" |
+    "TO" | "NY" | "NK" | "NG" | "UM" | "RY" | "AL"
+}
+
+// Squares
+square = { digit ~ digit }
+digit = { ASCII_DIGIT }
+
+// Position representation
+position = {
+    (handicap ~ line_sep ~ comment_line* ~ piece_placement_lines) |
+    (grid ~ comment_line* ~ piece_placement_lines) |
+    (handicap ~ line_sep) |
+    grid
+}
+
+// Handicap format: PI followed by optional pieces
+handicap = { "PI" ~ handicap_piece* }
+handicap_piece = { square ~ piece_type }
+
+// Grid format: P1 through P9
+grid = {
+    grid_row1 ~ line_sep ~
+    grid_row2 ~ line_sep ~
+    grid_row3 ~ line_sep ~
+    grid_row4 ~ line_sep ~
+    grid_row5 ~ line_sep ~
+    grid_row6 ~ line_sep ~
+    grid_row7 ~ line_sep ~
+    grid_row8 ~ line_sep ~
+    grid_row9 ~ line_sep
+}
+
+grid_row1 = { "P1" ~ grid_cell{9} }
+grid_row2 = { "P2" ~ grid_cell{9} }
+grid_row3 = { "P3" ~ grid_cell{9} }
+grid_row4 = { "P4" ~ grid_cell{9} }
+grid_row5 = { "P5" ~ grid_cell{9} }
+grid_row6 = { "P6" ~ grid_cell{9} }
+grid_row7 = { "P7" ~ grid_cell{9} }
+grid_row8 = { "P8" ~ grid_cell{9} }
+grid_row9 = { "P9" ~ grid_cell{9} }
+
+grid_cell = { grid_piece | grid_empty }
+grid_piece = { color ~ piece_type }
+grid_empty = @{ " " ~ ANY{2} }
+
+// Additional piece placements
+piece_placement_lines = { (piece_placement ~ line_sep ~ comment_line*)* }
+piece_placement = { "P" ~ color ~ placement_piece* }
+placement_piece = { square ~ piece_type }
+
+// Side to move
+side_to_move = { color }
+side_to_move_line = _{ side_to_move ~ line_sep }
+
+// Moves with newlines
+move_records = { (move_record_line | comment_line | program_comment_line | eval_comment_line)* }
+move_record_line = _{ move_record ~ line_sep ~ time_consumed? ~ (program_comment_line | eval_comment_line | comment_line)* }
+
+final_move = { move_record ~ &EOI }
+
+move_record = { normal_move | special_move }
+
+normal_move = { color ~ square ~ square ~ piece_type }
+
+// V3.0 special moves (added MAX_MOVES, removed MATTA)
+special_move = {
+    "%" ~ (
+        "TORYO" | "CHUDAN" | "SENNICHITE" | "TIME_UP" |
+        "ILLEGAL_MOVE" | "+ILLEGAL_ACTION" | "-ILLEGAL_ACTION" |
+        "JISHOGI" | "KACHI" | "HIKIWAKE" | "MAX_MOVES" | "TSUMI" | "FUZUMI" | "ERROR"
+    )
+}
+
+// Time consumed (V3.0 supports milliseconds)
+time_consumed = { "T" ~ seconds_consumed ~ line_sep }
+seconds_consumed = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT{1,3})? }

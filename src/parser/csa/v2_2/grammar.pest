@@ -1,0 +1,153 @@
+// CSA format grammar for Shogi game records - Version 2.2
+
+// Entry point - complete game record
+game_record = {
+    SOI ~
+    comment_line* ~
+    version_line ~
+    comment_line* ~
+    black_player_line? ~
+    comment_line* ~
+    white_player_line? ~
+    comment_line* ~
+    game_attr_line* ~
+    comment_line* ~
+    position ~
+    comment_line* ~
+    side_to_move_line ~
+    comment_line* ~
+    move_records ~
+    final_move? ~
+    trailing_content? ~
+    EOI
+}
+
+// Line separators
+line_sep = _{ ("\r\n" | "\n" | "\r" | ",") }
+
+// Comments - can be followed by line_sep or EOI
+comment = { "'" ~ (!line_sep ~ ANY)* }
+comment_line = _{ comment ~ line_sep }
+// Handle final content that may not have trailing newline
+trailing_content = _{ (comment_line | (comment ~ &EOI))* }
+
+// Version
+version = { "V2.2" }
+version_line = _{ version ~ line_sep }
+
+// Player names
+black_player = { "N+" ~ player_name }
+white_player = { "N-" ~ player_name }
+player_name = @{ (!line_sep ~ ANY)* }
+black_player_line = _{ black_player ~ line_sep }
+white_player_line = _{ white_player ~ line_sep }
+
+// Game attributes
+game_attr = { "$" ~ attr_key ~ ":" ~ attr_value }
+attr_key = @{ (!":" ~ !line_sep ~ ANY)+ }
+attr_value = { datetime | timelimit | attr_text }
+attr_text = @{ (!line_sep ~ ANY)* }
+game_attr_line = _{ comment_line* ~ game_attr ~ line_sep }
+
+// Date and time
+datetime = { date ~ (" " ~ time)? }
+date = @{ year ~ "/" ~ month ~ "/" ~ day }
+time = @{ hour ~ ":" ~ minute ~ ":" ~ second }
+year = @{ ASCII_DIGIT{4} }
+month = @{ ASCII_DIGIT{2} }
+day = @{ ASCII_DIGIT{2} }
+hour = @{ ASCII_DIGIT{2} }
+minute = @{ ASCII_DIGIT{2} }
+second = @{ ASCII_DIGIT{2} }
+
+// Time limit
+timelimit = { timelimit_hours ~ ":" ~ timelimit_minutes ~ "+" ~ timelimit_byoyomi }
+timelimit_hours = @{ ASCII_DIGIT+ }
+timelimit_minutes = @{ ASCII_DIGIT{2} }
+timelimit_byoyomi = @{ ASCII_DIGIT+ }
+
+// Colors
+color = { "+" | "-" }
+
+// Piece types
+piece_type = {
+    "FU" | "KY" | "KE" | "GI" | "KI" | "KA" | "HI" | "OU" |
+    "TO" | "NY" | "NK" | "NG" | "UM" | "RY" | "AL"
+}
+
+// Squares
+square = { digit ~ digit }
+digit = { ASCII_DIGIT }
+
+// Position representation
+position = {
+    (handicap ~ line_sep ~ comment_line* ~ piece_placement_lines) |
+    (grid ~ comment_line* ~ piece_placement_lines) |
+    (handicap ~ line_sep) |
+    grid
+}
+
+// Handicap format: PI followed by optional pieces
+handicap = { "PI" ~ handicap_piece* }
+handicap_piece = { square ~ piece_type }
+
+// Grid format: P1 through P9
+grid = {
+    grid_row1 ~ line_sep ~
+    grid_row2 ~ line_sep ~
+    grid_row3 ~ line_sep ~
+    grid_row4 ~ line_sep ~
+    grid_row5 ~ line_sep ~
+    grid_row6 ~ line_sep ~
+    grid_row7 ~ line_sep ~
+    grid_row8 ~ line_sep ~
+    grid_row9 ~ line_sep
+}
+
+grid_row1 = { "P1" ~ grid_cell{9} }
+grid_row2 = { "P2" ~ grid_cell{9} }
+grid_row3 = { "P3" ~ grid_cell{9} }
+grid_row4 = { "P4" ~ grid_cell{9} }
+grid_row5 = { "P5" ~ grid_cell{9} }
+grid_row6 = { "P6" ~ grid_cell{9} }
+grid_row7 = { "P7" ~ grid_cell{9} }
+grid_row8 = { "P8" ~ grid_cell{9} }
+grid_row9 = { "P9" ~ grid_cell{9} }
+
+// A grid cell is exactly 3 characters: either color+piece or empty (space + 2 chars)
+grid_cell = { grid_piece | grid_empty }
+grid_piece = { color ~ piece_type }
+// Empty cell starts with space and has 2 more characters
+grid_empty = @{ " " ~ ANY{2} }
+
+// Additional piece placements
+piece_placement_lines = { (piece_placement ~ line_sep ~ comment_line*)* }
+piece_placement = { "P" ~ color ~ placement_piece* }
+placement_piece = { square ~ piece_type }
+
+// Side to move
+side_to_move = { color }
+side_to_move_line = _{ side_to_move ~ line_sep }
+
+// Moves with newlines
+move_records = { (move_record_line | comment_line)* }
+move_record_line = _{ move_record ~ line_sep ~ time_consumed? ~ comment_line* }
+
+// Final move that may not have a trailing newline
+final_move = { move_record ~ &EOI }
+
+move_record = { normal_move | special_move }
+
+normal_move = { color ~ square ~ square ~ piece_type }
+
+// V2.2 special moves
+special_move = {
+    "%" ~ (
+        "TORYO" | "CHUDAN" | "SENNICHITE" | "TIME_UP" |
+        "ILLEGAL_MOVE" | "+ILLEGAL_ACTION" | "-ILLEGAL_ACTION" |
+        "JISHOGI" | "KACHI" | "HIKIWAKE" | "MATTA" | "TSUMI" | "FUZUMI" | "ERROR"
+    )
+}
+
+time_consumed = { "T" ~ seconds_consumed ~ line_sep }
+seconds_consumed = @{ ASCII_DIGIT+ }
