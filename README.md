@@ -1,14 +1,11 @@
-# csa-rs
+# shogi-kifu-rs
 
-[![Github Actions](https://github.com/nozaq/csa-rs/workflows/build/badge.svg)](https://github.com/nozaq/csa-rs/actions?workflow=build)
-[![Coverage Status](https://coveralls.io/repos/github/nozaq/csa-rs/badge.svg)](https://coveralls.io/github/nozaq/csa-rs)
-[![crates.io](https://img.shields.io/crates/v/csa.svg)](https://crates.io/crates/csa)
-[![docs.rs](https://docs.rs/csa/badge.svg)](https://docs.rs/csa)
+[![Github Actions](https://github.com/Arborescent/shogi-kifu-rs/workflows/build/badge.svg)](https://github.com/Arborescent/shogi-kifu-rs/actions?workflow=build)
 
 A Shogi game serialization/deserialization library in CSA format.
 CSA format is a plaintext format for recording Shogi games. This library supports parsing CSA-formatted string as well as composing CSA-formatted string from structs. Detail about CSA format is found at [here](http://www.computer-shogi.org/protocol/record_v22.html).
 
-[Documentation](https://docs.rs/csa)
+This is a fork of [csa-rs](https://github.com/nozaq/csa-rs) by [nozaq](https://github.com/nozaq).
 
 ## Usage
 
@@ -80,4 +77,4 @@ assert_eq!(csa_str, g.to_string());
 
 ## License
 
-`csa-rs` is licensed under the MIT license. Please read the [LICENSE](LICENSE) file in this repository for more information.
+`shogi-kifu-rs` is licensed under the MIT license. Please read the [LICENSE](LICENSE) file in this repository for more information.
