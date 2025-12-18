@@ -24,6 +24,8 @@ impl std::error::Error for ParseError {}
 struct CsaParser;
 
 type Grid = [[Option<(Color, PieceType)>; 9]; 9];
+type MinishogiGrid = [[Option<(Color, PieceType)>; 5]; 5];
+type WildcatGrid = [[Option<(Color, PieceType)>; 3]; 5];
 
 pub fn parse(input: &str) -> Result<GameRecord, ParseError> {
     let pairs = CsaParser::parse(Rule::game_record, input)
@@ -229,6 +231,8 @@ fn parse_position(pair: pest::iterators::Pair<Rule>) -> Position {
         match inner.as_rule() {
             Rule::handicap => pos.drop_pieces = parse_handicap(inner),
             Rule::grid => pos.bulk = Some(parse_grid(inner)),
+            Rule::minishogi_grid => pos.minishogi_bulk = Some(parse_minishogi_grid(inner)),
+            Rule::wildcat_grid => pos.wildcat_bulk = Some(parse_wildcat_grid(inner)),
             Rule::piece_placement_lines => pos.add_pieces = parse_piece_placements(inner),
             _ => {}
         }
@@ -280,6 +284,60 @@ fn parse_grid(pair: pest::iterators::Pair<Rule>) -> Grid {
             let mut col = 0;
             for cell in inner.into_inner() {
                 if cell.as_rule() == Rule::grid_cell && col < 9 {
+                    grid[row_idx][col] = parse_grid_cell(cell);
+                    col += 1;
+                }
+            }
+        }
+    }
+
+    grid
+}
+
+fn parse_minishogi_grid(pair: pest::iterators::Pair<Rule>) -> MinishogiGrid {
+    let mut grid: MinishogiGrid = [[None; 5]; 5];
+
+    for inner in pair.into_inner() {
+        let row_num = match inner.as_rule() {
+            Rule::mini_row1 => Some(0),
+            Rule::mini_row2 => Some(1),
+            Rule::mini_row3 => Some(2),
+            Rule::mini_row4 => Some(3),
+            Rule::mini_row5 => Some(4),
+            _ => None,
+        };
+
+        if let Some(row_idx) = row_num {
+            let mut col = 0;
+            for cell in inner.into_inner() {
+                if cell.as_rule() == Rule::grid_cell && col < 5 {
+                    grid[row_idx][col] = parse_grid_cell(cell);
+                    col += 1;
+                }
+            }
+        }
+    }
+
+    grid
+}
+
+fn parse_wildcat_grid(pair: pest::iterators::Pair<Rule>) -> WildcatGrid {
+    let mut grid: WildcatGrid = [[None; 3]; 5];
+
+    for inner in pair.into_inner() {
+        let row_num = match inner.as_rule() {
+            Rule::wildcat_row1 => Some(0),
+            Rule::wildcat_row2 => Some(1),
+            Rule::wildcat_row3 => Some(2),
+            Rule::wildcat_row4 => Some(3),
+            Rule::wildcat_row5 => Some(4),
+            _ => None,
+        };
+
+        if let Some(row_idx) = row_num {
+            let mut col = 0;
+            for cell in inner.into_inner() {
+                if cell.as_rule() == Rule::grid_cell && col < 3 {
                     grid[row_idx][col] = parse_grid_cell(cell);
                     col += 1;
                 }
@@ -548,5 +606,365 @@ mod tests {
         assert_eq!(record.black_player, Some("NAKAHARA".to_string()));
         assert_eq!(record.white_player, Some("YONENAGA".to_string()));
         assert_eq!(record.moves.len(), 2);
+    }
+
+    /// Test minishogi-style position using piece placements.
+    ///
+    /// Minishogi is a 5x5 variant. Since the grid format is 9x9 only,
+    /// we use PI (to clear the standard position) with piece placements
+    /// to set up the minishogi starting position:
+    ///
+    /// ```text
+    ///    5   4   3   2   1
+    /// 1 -OU -KI -GI -KA -HI  (white back rank)
+    /// 2  .   .   .   .  -FU  (white pawn)
+    /// 3  .   .   .   .   .
+    /// 4 +FU  .   .   .   .   (black pawn)
+    /// 5 +HI +KA +GI +KI +OU  (black back rank)
+    /// ```
+    #[test]
+    fn test_minishogi_piece_placements() {
+        let csa = concat!(
+            "V2.2\n",
+            "N+Sente\n",
+            "N-Gote\n",
+            "$EVENT:Minishogi Game\n",
+            "PI\n",
+            "P-51OU41KI31GI21KA11HI12FU\n",
+            "P+55HI45KA35GI25KI15OU54FU\n",
+            "+\n",
+            "+5453FU\n",
+            "T5\n",
+            "-1213FU\n",
+            "T3\n",
+            "%TORYO\n",
+        );
+
+        let result = parse(csa);
+        assert!(result.is_ok(), "Failed to parse minishogi: {:?}", result);
+
+        let record = result.unwrap();
+        assert_eq!(record.black_player, Some("Sente".to_string()));
+        assert_eq!(record.white_player, Some("Gote".to_string()));
+        assert_eq!(record.event, Some("Minishogi Game".to_string()));
+
+        // Check piece placements were parsed
+        // White pieces: King(5,1), Gold(4,1), Silver(3,1), Bishop(2,1), Rook(1,1), Pawn(1,2)
+        // Black pieces: Rook(5,5), Bishop(4,5), Silver(3,5), Gold(2,5), King(1,5), Pawn(5,4)
+        assert_eq!(record.start_pos.add_pieces.len(), 12);
+
+        // Verify some specific pieces
+        assert!(record.start_pos.add_pieces.contains(&(
+            Color::White,
+            Square::new(5, 1),
+            PieceType::King
+        )));
+        assert!(record.start_pos.add_pieces.contains(&(
+            Color::Black,
+            Square::new(1, 5),
+            PieceType::King
+        )));
+        assert!(record.start_pos.add_pieces.contains(&(
+            Color::Black,
+            Square::new(5, 4),
+            PieceType::Pawn
+        )));
+
+        // Check moves
+        assert_eq!(record.moves.len(), 3);
+
+        // First move: Black pawn 54 -> 53
+        assert_eq!(
+            record.moves[0].action,
+            Action::Move(Color::Black, Square::new(5, 4), Square::new(5, 3), PieceType::Pawn)
+        );
+        assert_eq!(record.moves[0].time, Some(Duration::from_secs(5)));
+
+        // Second move: White pawn 12 -> 13
+        assert_eq!(
+            record.moves[1].action,
+            Action::Move(Color::White, Square::new(1, 2), Square::new(1, 3), PieceType::Pawn)
+        );
+
+        // Third: resignation
+        assert_eq!(record.moves[2].action, Action::Toryo);
+    }
+
+    /// Test minishogi with drops (pieces captured and dropped back).
+    #[test]
+    fn test_minishogi_with_drops() {
+        let csa = concat!(
+            "V2.2\n",
+            "$EVENT:Minishogi Drop Test\n",
+            "PI\n",
+            "P-51OU41KI31GI21KA11HI12FU\n",
+            "P+55HI45KA35GI25KI15OU54FU\n",
+            "+\n",
+            "+5453FU\n",
+            "-1213FU\n",
+            "+5352FU\n",
+            "-0053FU\n",
+            "%TORYO\n",
+        );
+
+        let result = parse(csa);
+        assert!(result.is_ok(), "Failed to parse minishogi with drops: {:?}", result);
+
+        let record = result.unwrap();
+
+        // Check drop move (from square 00 means drop)
+        // Move 4: White drops pawn at 53
+        assert_eq!(
+            record.moves[3].action,
+            Action::Move(Color::White, Square::new(0, 0), Square::new(5, 3), PieceType::Pawn)
+        );
+    }
+
+    /// Test minishogi with native 5x5 grid format.
+    ///
+    /// Minishogi starting position:
+    /// ```text
+    ///    5   4   3   2   1
+    /// 1 -HI -KA -GI -KI -OU  (white back rank)
+    /// 2  .   .   .   .  -FU  (white pawn)
+    /// 3  .   .   .   .   .   (empty)
+    /// 4 +FU  .   .   .   .   (black pawn)
+    /// 5 +OU +KI +GI +KA +HI  (black back rank)
+    /// ```
+    #[test]
+    fn test_minishogi_grid_format() {
+        let csa = concat!(
+            "V2.2\n",
+            "N+Sente\n",
+            "N-Gote\n",
+            "$EVENT:Minishogi Grid Test\n",
+            "P1-HI-KA-GI-KI-OU\n",
+            "P2 *  *  *  * -FU\n",
+            "P3 *  *  *  *  * \n",
+            "P4+FU *  *  *  * \n",
+            "P5+OU+KI+GI+KA+HI\n",
+            "+\n",
+            "+5453FU\n",
+            "T5\n",
+            "-1213FU\n",
+            "T3\n",
+            "%TORYO\n",
+        );
+
+        let result = parse(csa);
+        assert!(result.is_ok(), "Failed to parse minishogi grid: {:?}", result);
+
+        let record = result.unwrap();
+        assert_eq!(record.black_player, Some("Sente".to_string()));
+        assert_eq!(record.white_player, Some("Gote".to_string()));
+
+        // Check that minishogi_bulk was set
+        assert!(record.start_pos.minishogi_bulk.is_some());
+        assert!(record.start_pos.bulk.is_none());
+
+        let grid = record.start_pos.minishogi_bulk.unwrap();
+
+        // Check white back rank (row 0 = rank 1)
+        // Files are 5,4,3,2,1 from left to right (index 0,1,2,3,4)
+        assert_eq!(grid[0][0], Some((Color::White, PieceType::Rook)));    // 51 = -HI
+        assert_eq!(grid[0][1], Some((Color::White, PieceType::Bishop)));  // 41 = -KA
+        assert_eq!(grid[0][2], Some((Color::White, PieceType::Silver)));  // 31 = -GI
+        assert_eq!(grid[0][3], Some((Color::White, PieceType::Gold)));    // 21 = -KI
+        assert_eq!(grid[0][4], Some((Color::White, PieceType::King)));    // 11 = -OU
+
+        // Check white pawn (row 1 = rank 2)
+        assert_eq!(grid[1][4], Some((Color::White, PieceType::Pawn)));    // 12 = -FU
+        assert_eq!(grid[1][0], None);  // Empty
+
+        // Check empty row (row 2 = rank 3)
+        for col in 0..5 {
+            assert_eq!(grid[2][col], None);
+        }
+
+        // Check black pawn (row 3 = rank 4)
+        assert_eq!(grid[3][0], Some((Color::Black, PieceType::Pawn)));    // 54 = +FU
+
+        // Check black back rank (row 4 = rank 5)
+        assert_eq!(grid[4][0], Some((Color::Black, PieceType::King)));    // 55 = +OU
+        assert_eq!(grid[4][4], Some((Color::Black, PieceType::Rook)));    // 15 = +HI
+
+        // Check moves
+        assert_eq!(record.moves.len(), 3);
+        assert_eq!(
+            record.moves[0].action,
+            Action::Move(Color::Black, Square::new(5, 4), Square::new(5, 3), PieceType::Pawn)
+        );
+    }
+
+    /// Test minishogi grid round-trip (parse -> serialize -> parse).
+    #[test]
+    fn test_minishogi_grid_roundtrip() {
+        let csa = concat!(
+            "V2.2\n",
+            "P1-HI-KA-GI-KI-OU\n",
+            "P2 *  *  *  * -FU\n",
+            "P3 *  *  *  *  * \n",
+            "P4+FU *  *  *  * \n",
+            "P5+OU+KI+GI+KA+HI\n",
+            "+\n",
+        );
+
+        let result = parse(csa);
+        assert!(result.is_ok(), "Failed to parse: {:?}", result);
+
+        let record = result.unwrap();
+        let serialized = record.to_string();
+
+        // Parse the serialized output
+        let result2 = parse(&serialized);
+        assert!(result2.is_ok(), "Failed to re-parse: {:?}", result2);
+
+        let record2 = result2.unwrap();
+        assert_eq!(record.start_pos.minishogi_bulk, record2.start_pos.minishogi_bulk);
+    }
+
+    /// Test Wild Cat Shogi with native 3x5 grid format.
+    ///
+    /// Wild Cat Shogi starting position (3 files x 5 ranks):
+    /// ```text
+    ///    3   2   1
+    /// 1 -KA -OU -HI  (white/gote back rank: Fers, King, Wazir)
+    /// 2 -FU  .  -FU  (white pawns)
+    /// 3  .   .   .   (empty)
+    /// 4 +FU  .  +FU  (black pawns)
+    /// 5 +HI +OU +KA  (black/sente back rank: Wazir, King, Fers)
+    /// ```
+    ///
+    /// Note: In Wild Cat Shogi, Wazir uses "HI" (moves 1 square orthogonally)
+    /// and Fers uses "KA" (moves 1 square diagonally).
+    #[test]
+    fn test_wildcat_grid_format() {
+        let csa = concat!(
+            "V2.2\n",
+            "N+Sente\n",
+            "N-Gote\n",
+            "$EVENT:Wild Cat Shogi Game\n",
+            "P1-KA-OU-HI\n",
+            "P2-FU * -FU\n",
+            "P3 *  *  * \n",
+            "P4+FU * +FU\n",
+            "P5+HI+OU+KA\n",
+            "+\n",
+            "+3433FU\n",
+            "T5\n",
+            "-1213FU\n",
+            "T3\n",
+            "%TORYO\n",
+        );
+
+        let result = parse(csa);
+        assert!(result.is_ok(), "Failed to parse wildcat grid: {:?}", result);
+
+        let record = result.unwrap();
+        assert_eq!(record.black_player, Some("Sente".to_string()));
+        assert_eq!(record.white_player, Some("Gote".to_string()));
+
+        // Check that wildcat_bulk was set
+        assert!(record.start_pos.wildcat_bulk.is_some());
+        assert!(record.start_pos.bulk.is_none());
+        assert!(record.start_pos.minishogi_bulk.is_none());
+
+        let grid = record.start_pos.wildcat_bulk.unwrap();
+
+        // Check white back rank (row 0 = rank 1)
+        // Files are 3,2,1 from left to right (index 0,1,2)
+        assert_eq!(grid[0][0], Some((Color::White, PieceType::Bishop)));  // 31 = -KA (Fers)
+        assert_eq!(grid[0][1], Some((Color::White, PieceType::King)));    // 21 = -OU
+        assert_eq!(grid[0][2], Some((Color::White, PieceType::Rook)));    // 11 = -HI (Wazir)
+
+        // Check white pawns (row 1 = rank 2)
+        assert_eq!(grid[1][0], Some((Color::White, PieceType::Pawn)));    // 32 = -FU
+        assert_eq!(grid[1][1], None);                                      // Empty
+        assert_eq!(grid[1][2], Some((Color::White, PieceType::Pawn)));    // 12 = -FU
+
+        // Check empty row (row 2 = rank 3)
+        for col in 0..3 {
+            assert_eq!(grid[2][col], None);
+        }
+
+        // Check black pawns (row 3 = rank 4)
+        assert_eq!(grid[3][0], Some((Color::Black, PieceType::Pawn)));    // 34 = +FU
+        assert_eq!(grid[3][2], Some((Color::Black, PieceType::Pawn)));    // 14 = +FU
+
+        // Check black back rank (row 4 = rank 5)
+        assert_eq!(grid[4][0], Some((Color::Black, PieceType::Rook)));    // 35 = +HI (Wazir)
+        assert_eq!(grid[4][1], Some((Color::Black, PieceType::King)));    // 25 = +OU
+        assert_eq!(grid[4][2], Some((Color::Black, PieceType::Bishop)));  // 15 = +KA (Fers)
+
+        // Check moves
+        assert_eq!(record.moves.len(), 3);
+        assert_eq!(
+            record.moves[0].action,
+            Action::Move(Color::Black, Square::new(3, 4), Square::new(3, 3), PieceType::Pawn)
+        );
+    }
+
+    /// Test Wild Cat Shogi with drops.
+    #[test]
+    fn test_wildcat_with_drops() {
+        let csa = concat!(
+            "V2.2\n",
+            "$EVENT:Wild Cat Drop Test\n",
+            "P1-KA-OU-HI\n",
+            "P2-FU * -FU\n",
+            "P3 *  *  * \n",
+            "P4+FU * +FU\n",
+            "P5+HI+OU+KA\n",
+            "+\n",
+            "+3433FU\n",
+            "-1213FU\n",
+            "+3332TO\n",
+            "-0033FU\n",
+            "%TORYO\n",
+        );
+
+        let result = parse(csa);
+        assert!(result.is_ok(), "Failed to parse wildcat with drops: {:?}", result);
+
+        let record = result.unwrap();
+
+        // Check promotion move (pawn promotes to gold = TO)
+        assert_eq!(
+            record.moves[2].action,
+            Action::Move(Color::Black, Square::new(3, 3), Square::new(3, 2), PieceType::ProPawn)
+        );
+
+        // Check drop move (from square 00 means drop)
+        assert_eq!(
+            record.moves[3].action,
+            Action::Move(Color::White, Square::new(0, 0), Square::new(3, 3), PieceType::Pawn)
+        );
+    }
+
+    /// Test Wild Cat Shogi grid round-trip.
+    #[test]
+    fn test_wildcat_grid_roundtrip() {
+        let csa = concat!(
+            "V2.2\n",
+            "P1-KA-OU-HI\n",
+            "P2-FU * -FU\n",
+            "P3 *  *  * \n",
+            "P4+FU * +FU\n",
+            "P5+HI+OU+KA\n",
+            "+\n",
+        );
+
+        let result = parse(csa);
+        assert!(result.is_ok(), "Failed to parse: {:?}", result);
+
+        let record = result.unwrap();
+        let serialized = record.to_string();
+
+        // Parse the serialized output
+        let result2 = parse(&serialized);
+        assert!(result2.is_ok(), "Failed to re-parse: {:?}", result2);
+
+        let record2 = result2.unwrap();
+        assert_eq!(record.start_pos.wildcat_bulk, record2.start_pos.wildcat_bulk);
     }
 }

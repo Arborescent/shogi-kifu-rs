@@ -83,15 +83,19 @@ digit = { ASCII_DIGIT }
 position = {
     (handicap ~ line_sep ~ comment_line* ~ piece_placement_lines) |
     (grid ~ comment_line* ~ piece_placement_lines) |
+    (minishogi_grid ~ comment_line* ~ piece_placement_lines) |
+    (wildcat_grid ~ comment_line* ~ piece_placement_lines) |
     (handicap ~ line_sep) |
-    grid
+    grid |
+    minishogi_grid |
+    wildcat_grid
 }
 
 // Handicap format: PI followed by optional pieces
 handicap = { "PI" ~ handicap_piece* }
 handicap_piece = { square ~ piece_type }
 
-// Grid format: P1 through P9
+// Standard shogi grid format: P1 through P9 (9x9)
 grid = {
     grid_row1 ~ line_sep ~
     grid_row2 ~ line_sep ~
@@ -113,6 +117,36 @@ grid_row6 = { "P6" ~ grid_cell{9} }
 grid_row7 = { "P7" ~ grid_cell{9} }
 grid_row8 = { "P8" ~ grid_cell{9} }
 grid_row9 = { "P9" ~ grid_cell{9} }
+
+// Minishogi grid format: P1 through P5 (5x5)
+minishogi_grid = {
+    mini_row1 ~ line_sep ~
+    mini_row2 ~ line_sep ~
+    mini_row3 ~ line_sep ~
+    mini_row4 ~ line_sep ~
+    mini_row5 ~ line_sep
+}
+
+mini_row1 = { "P1" ~ grid_cell{5} }
+mini_row2 = { "P2" ~ grid_cell{5} }
+mini_row3 = { "P3" ~ grid_cell{5} }
+mini_row4 = { "P4" ~ grid_cell{5} }
+mini_row5 = { "P5" ~ grid_cell{5} }
+
+// Wild Cat Shogi grid format: P1 through P5 (3x5 - 3 files, 5 ranks)
+wildcat_grid = {
+    wildcat_row1 ~ line_sep ~
+    wildcat_row2 ~ line_sep ~
+    wildcat_row3 ~ line_sep ~
+    wildcat_row4 ~ line_sep ~
+    wildcat_row5 ~ line_sep
+}
+
+wildcat_row1 = { "P1" ~ grid_cell{3} }
+wildcat_row2 = { "P2" ~ grid_cell{3} }
+wildcat_row3 = { "P3" ~ grid_cell{3} }
+wildcat_row4 = { "P4" ~ grid_cell{3} }
+wildcat_row5 = { "P5" ~ grid_cell{3} }
 
 // A grid cell is exactly 3 characters: either color+piece or empty (space + 2 chars)
 grid_cell = { grid_piece | grid_empty }

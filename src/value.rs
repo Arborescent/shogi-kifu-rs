@@ -143,16 +143,11 @@ impl fmt::Display for GameAttribute {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum Color {
+    #[default]
     Black,
     White,
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Color::Black
-    }
 }
 
 impl fmt::Display for Color {
@@ -230,12 +225,21 @@ impl fmt::Display for PieceType {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-type Board = [[Option<(Color, PieceType)>; 9]; 9];
+/// Standard 9x9 shogi board
+pub type Board = [[Option<(Color, PieceType)>; 9]; 9];
+
+/// Minishogi 5x5 board
+pub type MinishogiBoard = [[Option<(Color, PieceType)>; 5]; 5];
+
+/// Wild Cat Shogi 3x5 board (3 files, 5 ranks)
+pub type WildcatBoard = [[Option<(Color, PieceType)>; 3]; 5];
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Position {
     pub drop_pieces: Vec<(Square, PieceType)>,
     pub bulk: Option<Board>,
+    pub minishogi_bulk: Option<MinishogiBoard>,
+    pub wildcat_bulk: Option<WildcatBoard>,
     pub add_pieces: Vec<(Color, Square, PieceType)>,
     pub side_to_move: Color,
 }
@@ -243,6 +247,35 @@ pub struct Position {
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(ref bulk) = self.bulk {
+            // Standard 9x9 shogi
+            for (i, row) in bulk.iter().enumerate() {
+                write!(f, "P{}", i + 1)?;
+
+                for pc in row.iter() {
+                    match *pc {
+                        Some((ref color, ref pt)) => write!(f, "{color}{pt}")?,
+                        None => write!(f, " * ")?,
+                    }
+                }
+
+                writeln!(f)?;
+            }
+        } else if let Some(ref bulk) = self.minishogi_bulk {
+            // Minishogi 5x5
+            for (i, row) in bulk.iter().enumerate() {
+                write!(f, "P{}", i + 1)?;
+
+                for pc in row.iter() {
+                    match *pc {
+                        Some((ref color, ref pt)) => write!(f, "{color}{pt}")?,
+                        None => write!(f, " * ")?,
+                    }
+                }
+
+                writeln!(f)?;
+            }
+        } else if let Some(ref bulk) = self.wildcat_bulk {
+            // Wild Cat Shogi 3x5
             for (i, row) in bulk.iter().enumerate() {
                 write!(f, "P{}", i + 1)?;
 

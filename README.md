@@ -15,6 +15,30 @@ CSA format is a plaintext format for recording Shogi games. This library support
 
 Version is automatically detected from the version line in the input.
 
+## Supported Variants
+
+In addition to standard 9x9 shogi, this library supports smaller board variants:
+
+| Variant | Board Size | Description |
+|---------|------------|-------------|
+| Standard Shogi | 9x9 | Full shogi with all pieces |
+| Minishogi | 5x5 | Simplified variant with King, Rook, Bishop, Gold, Silver, Pawn |
+| Wild Cat Shogi | 3x5 | Kids variant with King, Wazir (as HI), Fers (as KA), Gold, Pawn |
+
+### Board Representation
+
+Variants use native grid formats with the appropriate number of cells per row:
+
+```
+Standard (9x9):     Minishogi (5x5):    Wild Cat (3x5):
+P1 ... (9 cells)    P1 ... (5 cells)    P1 ... (3 cells)
+P2 ... (9 cells)    P2 ... (5 cells)    P2 ... (3 cells)
+...                 ...                 ...
+P9 ... (9 cells)    P5 ... (5 cells)    P5 ... (3 cells)
+```
+
+Alternatively, piece placements (P+ and P-) can be used for any variant.
+
 This is a fork of [csa-rs](https://github.com/nozaq/csa-rs) by [nozaq](https://github.com/nozaq).
 
 ## Usage
