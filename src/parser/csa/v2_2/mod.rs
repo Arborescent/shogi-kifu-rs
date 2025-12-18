@@ -465,6 +465,8 @@ fn parse_move_record_action(pair: pest::iterators::Pair<Rule>) -> Action {
         match inner.as_rule() {
             Rule::normal_move => return parse_normal_move(inner),
             Rule::special_move => return parse_special_move(inner.as_str()),
+            // Handle nested move_record (e.g., from final_move which contains move_record)
+            Rule::move_record => return parse_move_record_action(inner),
             _ => {}
         }
     }

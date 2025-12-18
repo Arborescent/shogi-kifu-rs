@@ -83,6 +83,7 @@ pub fn parse(input: &str) -> Result<GameRecord, ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parse_csa;
 
     #[test]
     fn test_detect_version_v2() {
@@ -115,5 +116,35 @@ mod tests {
     #[test]
     fn test_detect_version_no_version() {
         assert_eq!(detect_version("PI\n+\n"), None);
+    }
+
+    #[test]
+    fn test_tsumi_without_trailing_newline() {
+        // Test that %TSUMI at end of file (no trailing newline) is parsed correctly
+        let csa = "V2.2\nPI\n+\n+7776FU\n%TSUMI";
+        let result = parse_csa(csa);
+        assert!(result.is_ok(), "Failed to parse CSA: {:?}", result.err());
+        let record = result.unwrap();
+        assert_eq!(record.moves.len(), 2, "Expected 2 moves (1 normal + 1 TSUMI)");
+        assert!(
+            matches!(record.moves[1].action, crate::Action::Tsumi),
+            "Expected Action::Tsumi, got {:?}",
+            record.moves[1].action
+        );
+    }
+
+    #[test]
+    fn test_tsumi_with_trailing_newline() {
+        // Test that %TSUMI with trailing newline is also parsed correctly
+        let csa = "V2.2\nPI\n+\n+7776FU\n%TSUMI\n";
+        let result = parse_csa(csa);
+        assert!(result.is_ok(), "Failed to parse CSA: {:?}", result.err());
+        let record = result.unwrap();
+        assert_eq!(record.moves.len(), 2, "Expected 2 moves (1 normal + 1 TSUMI)");
+        assert!(
+            matches!(record.moves[1].action, crate::Action::Tsumi),
+            "Expected Action::Tsumi, got {:?}",
+            record.moves[1].action
+        );
     }
 }
